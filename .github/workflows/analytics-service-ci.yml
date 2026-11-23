@@ -88,6 +88,7 @@ jobs:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
+          IMAGE_TAG="${GITHUB_SHA::7}"
           sed -i "s|image: .*|image: ${DOCKER_USERNAME}/taskflow-analytics:${IMAGE_TAG}|" kubernetes/analytics-service/deploy.yaml
 
       - name: Commit and push changes
