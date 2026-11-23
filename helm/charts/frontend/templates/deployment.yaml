@@ -1,57 +1,41 @@
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: analytics-service
+  name: frontend
   labels:
-    app: analytics-service
-
+    app: frontend
 spec:
-  replicas: 2
-
-  strategy:
-    type: RollingUpdate
-
+  replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app: analytics-service
-
+      app: frontend
   template:
     metadata:
       labels:
-        app: analytics-service
-
+        app: frontend
     spec:
       containers:
-        - name: analytics-service
-          image: premkrish308/taskflow-analytics:7a339be
-          imagePullPolicy: IfNotPresent
-
+        - name: frontend
+          image: "{{ .Values.image.repository }}:{{ required "Frontend image tag is required" .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - containerPort: 5002
-
+            - containerPort: 3000
           env:
             - name: TASK_SERVICE_URL
               value: "http://task-service:5001"
-
+            - name: ANALYTICS_SERVICE_URL
+              value: "http://analytics-service:5002"
           readinessProbe:
             httpGet:
               path: /health
-              port: 5002
+              port: 3000
             initialDelaySeconds: 5
             periodSeconds: 10
-
           livenessProbe:
             httpGet:
               path: /health
-              port: 5002
+              port: 3000
             initialDelaySeconds: 15
             periodSeconds: 20
-
           resources:
-            requests:
-              cpu: "100m"
-              memory: "128Mi"
-            limits:
-              cpu: "500m"
-              memory: "256Mi"
+            {{- toYaml .Values.resources | nindent 12 }}
