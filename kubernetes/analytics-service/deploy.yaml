@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
         - name: analytics-service
-          image: premkrish308/taskflow-analytics:YOUR_IMAGE_TAG
+          image: premkrish308/taskflow-analytics:82628ed73176e4b629c5cbb9732cea0c46a17472
           imagePullPolicy: IfNotPresent
 
           ports:
