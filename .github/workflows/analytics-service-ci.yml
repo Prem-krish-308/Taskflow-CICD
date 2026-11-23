@@ -4,14 +4,14 @@ name: analytics-service-ci
 on:
   pull_request:
     branches:
-      - main
+      - develop
     paths:
       - 'src/analytics-service/**'
       - '.github/workflows/analytics-service-ci.yml'
 
   push:
     branches:
-      - main
+      - develop
     paths:
       - 'src/analytics-service/**'
       - '.github/workflows/analytics-service-ci.yml'

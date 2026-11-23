@@ -3,14 +3,14 @@ name: task-service-ci
 on:
   pull_request:
     branches:
-      - main
+      - develop
     paths:
       - 'src/task-service/**'
       - '.github/workflows/task-service-ci.yml'
 
   push:
     branches:
-      - main
+      - develop
     paths:
       - 'src/task-service/**'
       - '.github/workflows/task-service-ci.yml'
