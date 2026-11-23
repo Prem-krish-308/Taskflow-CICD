@@ -104,5 +104,5 @@ jobs:
           fi
 
           git commit -m "[CI]: Update analytics-service image tag"
-          git pull --rebase origin main
-          git push origin HEAD:main
+          git pull --rebase origin develop
+          git push origin HEAD:develop
