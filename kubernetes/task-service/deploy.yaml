@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
         - name: task-service
-          image: premkrish308/taskflow-task:YOUR_IMAGE_TAG
+          image: premkrish308/taskflow-task:be71d307afae99ebec23121e39561cd604447949
           imagePullPolicy: IfNotPresent
 
           ports:
