@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: premkrish308/taskflow-frontend:7f43182
+          image: premkrish308/taskflow-frontend:7a339be
           imagePullPolicy: IfNotPresent
 
           ports:
