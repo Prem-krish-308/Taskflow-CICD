@@ -91,7 +91,7 @@ jobs:
           IMAGE_TAG="${GITHUB_SHA::7}"
           sed -i "s|tag: .*|tag: \"${IMAGE_TAG}\"|" helm/environments/dev/analytics-service-values.yaml
 
-      - name: Commit and push changes
+      - name: Commit and push Helm changes
         run: |
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
@@ -104,5 +104,19 @@ jobs:
           fi
 
           git commit -m "[CI]: Update analytics-service image tag"
-          git pull --rebase origin develop
-          git push origin HEAD:develop
+
+          for attempt in 1 2 3 4 5; do
+            git fetch origin develop
+            git rebase origin/develop
+
+            if git push origin HEAD:develop; then
+              echo "Successfully pushed Helm changes"
+              exit 0
+            fi
+
+            echo "Push failed. Retrying attempt $attempt..."
+            sleep 5
+          done
+
+          echo "Failed to push after 5 attempts"
+          exit 1
