@@ -1,53 +1,37 @@
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: task-service
   labels:
     app: task-service
-
 spec:
-  replicas: 1
-
-  strategy:
-    type: RollingUpdate
-
+  replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
       app: task-service
-
   template:
     metadata:
       labels:
         app: task-service
-
     spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
       containers:
         - name: task-service
-          image: premkrish308/taskflow-task:7f43182
-          imagePullPolicy: IfNotPresent
-
+          image: "{{ .Values.image.repository }}:{{ required "Task Service image tag is required" .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - containerPort: 5001
-
           readinessProbe:
             httpGet:
               path: /health
               port: 5001
             initialDelaySeconds: 5
             periodSeconds: 10
-
           livenessProbe:
             httpGet:
               path: /health
               port: 5001
             initialDelaySeconds: 15
             periodSeconds: 20
-
           resources:
-            requests:
-              cpu: "100m"
-              memory: "128Mi"
-            limits:
-              cpu: "500m"
-              memory: "256Mi"
+            {{- toYaml .Values.resources | nindent 12 }}

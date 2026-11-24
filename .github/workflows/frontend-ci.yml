@@ -4,14 +4,14 @@ name: frontend-ci
 on:
   pull_request:
     branches:
-      - main
+      - develop
     paths:
       - 'src/frontend/**'
       - '.github/workflows/frontend-ci.yml'
 
   push:
     branches:
-      - main
+      - develop
     paths:
       - 'src/frontend/**'
       - '.github/workflows/frontend-ci.yml'
@@ -86,15 +86,15 @@ jobs:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          IMAGE_TAG="${GITHUB_SHA::7}"
-          sed -i "s|image: .*|image: ${DOCKER_USERNAME}/taskflow-frontend:${IMAGE_TAG}|" kubernetes/frontend/deploy.yaml
+          IMAGE_TAG="${GITHUB_SHA}"
+          sed -i "s|tag: .*|tag: \"${IMAGE_TAG}\"|" helm/environments/dev/frontend-values.yaml
 
-      - name: Commit and push changes
+      - name: Commit and push Helm changes
         run: |
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
 
-          git add kubernetes/frontend/deploy.yaml
+          git add helm/environments/dev/frontend-values.yaml
 
           if git diff --cached --quiet; then
             echo "No changes to commit"
@@ -102,5 +102,19 @@ jobs:
           fi
 
           git commit -m "[CI]: Update frontend image tag"
-          git pull --rebase origin main
-          git push origin HEAD:main
+
+          for attempt in 1 2 3 4 5; do
+            git fetch origin develop
+            git rebase origin/develop
+
+            if git push origin HEAD:develop; then
+              echo "Successfully pushed Helm changes"
+              exit 0
+            fi
+
+            echo "Push failed. Retrying attempt $attempt..."
+            sleep 5
+          done
+
+          echo "Failed to push after 5 attempts"
+          exit 1
