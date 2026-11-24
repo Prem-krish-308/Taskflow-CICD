@@ -23,3 +23,5 @@ ingress:
   scheme: internet-facing
   targetType: ip
   healthCheckPath: /health
+  host: mytask.com
+  groupName: taskflow-shared
