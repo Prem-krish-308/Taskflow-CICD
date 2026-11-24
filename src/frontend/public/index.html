@@ -1,1 +1,91 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TaskFlow</title><link rel="stylesheet" href="/style.css"></head><body><main><header><div><h1>TaskFlow</h1><p>Microservices-powered task board</p></div><span id="health">Connecting...</span></header><section class="stats"><article><strong id="total">0</strong><small>Total tasks</small></article><article><strong id="open">0</strong><small>Open</small></article><article><strong id="done">0</strong><small>Completed</small></article><article><strong id="rate">0%</strong><small>Completion rate</small></article></section><form id="new-task"><input id="title" maxlength="120" placeholder="What needs to be done?" required><button>Add task</button></form><p id="error" role="alert"></p><section class="board"><div><h2>To do</h2><div id="todo" class="task-list"></div></div><div><h2>In progress</h2><div id="in_progress" class="task-list"></div></div><div><h2>Done</h2><div id="done-list" class="task-list"></div></div></section></main><script src="/app.js"></script></body></html>
+ <!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport"
+          content="width=device-width,initial-scale=1">
+    <title>TaskFlow</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+<main>
+
+    <header>
+        <div>
+            <h1>TaskFlow</h1>
+            <p>Microservices-powered task board</p>
+        </div>
+        <span id="health">Connecting...</span>
+    </header>
+
+    <section class="stats">
+        <article>
+            <strong id="total">0</strong>
+            <small>Total tasks</small>
+        </article>
+        <article>
+            <strong id="open">0</strong>
+            <small>Open</small>
+        </article>
+        <article>
+            <strong id="done">0</strong>
+            <small>Completed</small>
+        </article>
+        <article>
+            <strong id="rate">0%</strong>
+            <small>Completion rate</small>
+        </article>
+    </section>
+
+    <section class="stats priority-stats">
+        <article>
+            <strong id="high-count">0</strong>
+            <small>High priority</small>
+        </article>
+        <article>
+            <strong id="medium-count">0</strong>
+            <small>Medium priority</small>
+        </article>
+        <article>
+            <strong id="low-count">0</strong>
+            <small>Low priority</small>
+        </article>
+    </section>
+
+    <form id="new-task">
+        <input id="title"
+               maxlength="120"
+               placeholder="What needs to be done?"
+               required>
+
+        <select id="priority" aria-label="Task priority">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+        </select>
+
+        <button>Add task</button>
+    </form>
+
+    <p id="error" role="alert"></p>
+
+    <section class="board">
+        <div>
+            <h2>To do</h2>
+            <div id="todo" class="task-list"></div>
+        </div>
+        <div>
+            <h2>In progress</h2>
+            <div id="in_progress" class="task-list"></div>
+        </div>
+        <div>
+            <h2>Done</h2>
+            <div id="done-list" class="task-list"></div>
+        </div>
+    </section>
+
+</main>
+<script src="/app.js"></script>
+</body>
+</html>
