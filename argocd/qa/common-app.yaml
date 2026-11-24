@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: taskflow-qa-common
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/Prem-krish-308/Taskflow-CICD.git
+    targetRevision: release/1.0.0
+    path: helm/environments/qa/common
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: taskflow-qa
+
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true

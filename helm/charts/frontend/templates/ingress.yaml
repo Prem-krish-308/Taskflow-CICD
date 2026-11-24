@@ -8,10 +8,11 @@ metadata:
     alb.ingress.kubernetes.io/target-type: {{ .Values.ingress.targetType | quote }}
     alb.ingress.kubernetes.io/healthcheck-path: {{ .Values.ingress.healthCheckPath | quote }}
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    alb.ingress.kubernetes.io/group.name: {{ .Values.ingress.groupName | quote }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   rules:
-    - host: mytask.com
+    - host: {{ .Values.ingress.host | quote }}
       http:
         paths:
           - path: /
