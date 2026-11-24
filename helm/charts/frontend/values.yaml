@@ -17,3 +17,9 @@ resources:
   limits:
     cpu: 500m
     memory: 256Mi
+ingress:
+  enabled: false
+  className: alb
+  scheme: internet-facing
+  targetType: ip
+  healthCheckPath: /health
