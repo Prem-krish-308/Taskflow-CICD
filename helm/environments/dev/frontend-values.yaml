@@ -1,6 +1,6 @@
 replicaCount: 1
 
 image:
-  tag: "814ddeb"
+  tag: "814ddeb62cd3d5af1ebd77f7589fa57cebea85aa"
 ingress:
   enabled: true
