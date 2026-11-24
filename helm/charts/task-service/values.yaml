@@ -4,7 +4,8 @@ image:
   repository: premkrish308/taskflow-task
   tag: ""
   pullPolicy: IfNotPresent
-
+serviceAccount:
+  name: taskflow-sa
 service:
   type: ClusterIP
   port: 5001

@@ -14,6 +14,7 @@ spec:
       labels:
         app: analytics-service
     spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
       containers:
         - name: analytics-service
           image: "{{ .Values.image.repository }}:{{ required "Analytics image tag is required" .Values.image.tag }}"

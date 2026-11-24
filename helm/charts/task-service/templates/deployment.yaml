@@ -14,6 +14,7 @@ spec:
       labels:
         app: task-service
     spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
       containers:
         - name: task-service
           image: "{{ .Values.image.repository }}:{{ required "Task Service image tag is required" .Values.image.tag }}"
