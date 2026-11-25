@@ -1,0 +1,134 @@
+
+name: Promote Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_branch:
+        description: "Release branch"
+        required: true
+        type: string
+        default: "release/1.1.0"
+
+      target_environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - qa
+          - preprod
+          - prod
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promotion-${{ inputs.release_branch }}
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate release branch
+        env:
+          RELEASE_BRANCH: ${{ inputs.release_branch }}
+        run: |
+          if [[ ! "$RELEASE_BRANCH" =~ ^release/[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release branch"
+            exit 1
+          fi
+
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_branch }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install YAML dependency
+        run: pip install ruamel.yaml==0.18.10
+
+      - name: Promote image tags
+        env:
+          TARGET_ENV: ${{ inputs.target_environment }}
+        run: |
+          python <<'PY'
+          import os
+          from pathlib import Path
+          from ruamel.yaml import YAML
+
+          yaml = YAML()
+          yaml.preserve_quotes = True
+
+          target = os.environ["TARGET_ENV"]
+
+          promotion_map = {
+              "qa": "dev",
+              "preprod": "qa",
+              "prod": "preprod"
+          }
+
+          source = promotion_map[target]
+
+          services = [
+              "frontend",
+              "task-service",
+              "analytics-service"
+          ]
+
+          base = Path("helm/environments")
+
+          for service in services:
+
+              source_file = base / source / f"{service}-values.yaml"
+              target_file = base / target / f"{service}-values.yaml"
+
+              source_values = yaml.load(source_file)
+              target_values = yaml.load(target_file)
+
+              new_tag = source_values["image"]["tag"]
+              old_tag = target_values["image"]["tag"]
+
+              if not isinstance(new_tag, str) or not new_tag.strip():
+                  raise ValueError(f"Invalid image tag for {service}")
+
+              if new_tag.lower() == "latest":
+                  raise ValueError(f"Mutable latest tag for {service}")
+
+              if source_values["image"]["repository"] != target_values["image"]["repository"]:
+                  raise ValueError(f"Image repository mismatch for {service}")
+
+              print(f"{service}: {old_tag} -> {new_tag}")
+
+              if old_tag != new_tag:
+                  target_values["image"]["tag"] = new_tag
+                  yaml.dump(target_values, target_file)
+
+          print(f"Promotion completed: {source} -> {target}")
+          PY
+
+      - name: Review changes
+        run: git diff
+
+      - name: Commit and push promotion
+        env:
+          TARGET_ENV: ${{ inputs.target_environment }}
+          RELEASE_BRANCH: ${{ inputs.release_branch }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add "helm/environments/${TARGET_ENV}/"
+
+          if git diff --cached --quiet; then
+            echo "Image tags are already up to date"
+            exit 0
+          fi
+
+          git commit -m "[Promotion] Promote release to ${TARGET_ENV}"
+          git push origin "HEAD:${RELEASE_BRANCH}"
