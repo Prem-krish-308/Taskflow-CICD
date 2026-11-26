@@ -1,4 +1,3 @@
-
 name: Promote Release
 
 on:
@@ -70,7 +69,7 @@ jobs:
           promotion_map = {
               "qa": "dev",
               "preprod": "qa",
-              "prod": "preprod"
+              "prod": "preprod",
           }
 
           source = promotion_map[target]
@@ -78,21 +77,22 @@ jobs:
           services = [
               "frontend",
               "task-service",
-              "analytics-service"
+              "analytics-service",
           ]
 
           base = Path("helm/environments")
 
           for service in services:
-
               source_file = base / source / f"{service}-values.yaml"
               target_file = base / target / f"{service}-values.yaml"
 
               source_values = yaml.load(source_file)
               target_values = yaml.load(target_file)
+              source_image = source_values["image"]
+              target_image = target_values["image"]
 
-              new_tag = source_values["image"]["tag"]
-              old_tag = target_values["image"]["tag"]
+              new_tag = source_image["tag"]
+              old_tag = target_image["tag"]
 
               if not isinstance(new_tag, str) or not new_tag.strip():
                   raise ValueError(f"Invalid image tag for {service}")
@@ -100,13 +100,26 @@ jobs:
               if new_tag.lower() == "latest":
                   raise ValueError(f"Mutable latest tag for {service}")
 
-              if source_values["image"]["repository"] != target_values["image"]["repository"]:
-                  raise ValueError(f"Image repository mismatch for {service}")
+              chart_file = base.parent / "charts" / service / "values.yaml"
+              chart_values = yaml.load(chart_file)
+              default_repository = chart_values.get("image", {}).get("repository")
+
+              source_repository = source_image.get("repository", default_repository)
+              target_repository = target_image.get("repository", default_repository)
+
+              if not source_repository or not target_repository:
+                  raise ValueError(f"Missing image repository for {service}")
+
+              if source_repository != target_repository:
+                  raise ValueError(
+                      f"Image repository mismatch for {service}: "
+                      f"{source_repository} != {target_repository}"
+                  )
 
               print(f"{service}: {old_tag} -> {new_tag}")
 
               if old_tag != new_tag:
-                  target_values["image"]["tag"] = new_tag
+                  target_image["tag"] = new_tag
                   yaml.dump(target_values, target_file)
 
           print(f"Promotion completed: {source} -> {target}")
