@@ -1,0 +1,175 @@
+
+name: Prepare Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: "Release version, e.g. 1.2.0"
+        required: true
+        type: string
+
+      gitops_revision:
+        description: "Validated GitOps commit SHA"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: taskflow-release-management
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate release branch
+        env:
+          VERSION: ${{ inputs.release_version }}
+          GITOPS_REVISION: ${{ inputs.gitops_revision }}
+        run: |
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release version"
+            exit 1
+          fi
+
+          if [[ ! "$GITOPS_REVISION" =~ ^[a-f0-9]{40}$ ]]; then
+            echo "Provide a full GitOps commit SHA"
+            exit 1
+          fi
+
+          git ls-remote --exit-code --heads origin \
+            "refs/heads/release/${VERSION}"
+
+      - name: Checkout GitOps repository
+        uses: actions/checkout@v4
+        with:
+          repository: Prem-krish-308/Taskflow-GitOps
+          ref: main
+          token: ${{ secrets.GITOPS_TOKEN }}
+          fetch-depth: 0
+          path: gitops
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install YAML dependency
+        run: pip install ruamel.yaml==0.18.10
+
+      - name: Create release snapshot
+        working-directory: gitops
+        env:
+          VERSION: ${{ inputs.release_version }}
+          GITOPS_REVISION: ${{ inputs.gitops_revision }}
+        run: |
+          python <<'PY'
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+          from ruamel.yaml import YAML
+
+          yaml = YAML()
+          yaml.preserve_quotes = True
+
+          version = os.environ["VERSION"]
+          revision = os.environ["GITOPS_REVISION"]
+
+          subprocess.run(
+              ["git", "merge-base", "--is-ancestor",
+               revision, "HEAD"],
+              check=True
+          )
+
+          services = [
+              "frontend",
+              "task-service",
+              "analytics-service"
+          ]
+
+          release_file = Path(f"releases/{version}.yaml")
+
+          if release_file.exists():
+              raise ValueError("Release snapshot already exists")
+
+          snapshot = {
+              "release": version,
+              "sourceBranch": f"release/{version}",
+              "gitopsRevision": revision,
+              "images": {}
+          }
+
+          for service in services:
+              path = (
+                  f"helm/environments/dev/"
+                  f"{service}-values.yaml"
+              )
+
+              content = subprocess.check_output(
+                  ["git", "show", f"{revision}:{path}"],
+                  text=True
+              )
+
+              values = yaml.load(content)
+
+              repository = values["image"]["repository"]
+              tag = values["image"]["tag"]
+
+              if not isinstance(repository, str) or not repository:
+                  raise ValueError(f"Invalid repository: {service}")
+
+              if not isinstance(tag, str) or not re.fullmatch(
+                  r"[a-f0-9]{7,40}", tag
+              ):
+                  raise ValueError(f"Invalid image tag: {service}")
+
+              snapshot["images"][service] = {
+                  "repository": repository,
+                  "tag": tag
+              }
+
+              print(f"{service}: {repository}:{tag}")
+
+          release_file.parent.mkdir(parents=True, exist_ok=True)
+          yaml.dump(snapshot, release_file)
+
+          print(f"Release snapshot created: {release_file}")
+          PY
+
+      - name: Commit release snapshot
+        working-directory: gitops
+        env:
+          VERSION: ${{ inputs.release_version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add "releases/${VERSION}.yaml"
+          git commit -m "[Release] Prepare release ${VERSION}"
+
+          for attempt in {1..5}; do
+            git fetch origin main
+
+            if ! git rebase origin/main; then
+              git rebase --abort
+              exit 1
+            fi
+
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+
+            sleep 5
+          done
+
+          exit 1

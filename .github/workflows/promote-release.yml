@@ -1,13 +1,13 @@
+
 name: Promote Release
 
 on:
   workflow_dispatch:
     inputs:
-      release_branch:
-        description: "Release branch"
+      release_version:
+        description: "Release version, e.g. 1.1.0"
         required: true
         type: string
-        default: "release/1.1.0"
 
       target_environment:
         description: "Target environment"
@@ -19,30 +19,35 @@ on:
           - prod
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: promotion-${{ inputs.release_branch }}
+  group: taskflow-release-management
   cancel-in-progress: false
 
 jobs:
   promote:
     runs-on: ubuntu-latest
 
+    environment: ${{ inputs.target_environment }}
+
     steps:
-      - name: Validate release branch
+      - name: Validate release version
         env:
-          RELEASE_BRANCH: ${{ inputs.release_branch }}
+          VERSION: ${{ inputs.release_version }}
         run: |
-          if [[ ! "$RELEASE_BRANCH" =~ ^release/[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid release branch"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release version"
             exit 1
           fi
 
-      - name: Checkout release branch
+      - name: Checkout GitOps repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.release_branch }}
+          repository: Prem-krish-308/Taskflow-GitOps
+          ref: main
+          token: ${{ secrets.GITOPS_TOKEN }}
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -52,8 +57,9 @@ jobs:
       - name: Install YAML dependency
         run: pip install ruamel.yaml==0.18.10
 
-      - name: Promote image tags
+      - name: Promote release images
         env:
+          VERSION: ${{ inputs.release_version }}
           TARGET_ENV: ${{ inputs.target_environment }}
         run: |
           python <<'PY'
@@ -64,65 +70,75 @@ jobs:
           yaml = YAML()
           yaml.preserve_quotes = True
 
+          version = os.environ["VERSION"]
           target = os.environ["TARGET_ENV"]
 
-          promotion_map = {
-              "qa": "dev",
-              "preprod": "qa",
-              "prod": "preprod",
-          }
+          release_file = Path(f"releases/{version}.yaml")
 
-          source = promotion_map[target]
+          if not release_file.exists():
+              raise ValueError("Release snapshot does not exist")
+
+          snapshot = yaml.load(release_file)
+
+          if str(snapshot["release"]) != version:
+              raise ValueError("Release version mismatch")
 
           services = [
               "frontend",
               "task-service",
-              "analytics-service",
+              "analytics-service"
           ]
 
           base = Path("helm/environments")
 
-          for service in services:
-              source_file = base / source / f"{service}-values.yaml"
-              target_file = base / target / f"{service}-values.yaml"
+          previous_environment = {
+              "preprod": "qa",
+              "prod": "preprod"
+          }
 
-              source_values = yaml.load(source_file)
-              target_values = yaml.load(target_file)
-              source_image = source_values["image"]
-              target_image = target_values["image"]
+          if target in previous_environment:
+              previous = previous_environment[target]
 
-              new_tag = source_image["tag"]
-              old_tag = target_image["tag"]
-
-              if not isinstance(new_tag, str) or not new_tag.strip():
-                  raise ValueError(f"Invalid image tag for {service}")
-
-              if new_tag.lower() == "latest":
-                  raise ValueError(f"Mutable latest tag for {service}")
-
-              chart_file = base.parent / "charts" / service / "values.yaml"
-              chart_values = yaml.load(chart_file)
-              default_repository = chart_values.get("image", {}).get("repository")
-
-              source_repository = source_image.get("repository", default_repository)
-              target_repository = target_image.get("repository", default_repository)
-
-              if not source_repository or not target_repository:
-                  raise ValueError(f"Missing image repository for {service}")
-
-              if source_repository != target_repository:
-                  raise ValueError(
-                      f"Image repository mismatch for {service}: "
-                      f"{source_repository} != {target_repository}"
+              for service in services:
+                  previous_file = (
+                      base / previous /
+                      f"{service}-values.yaml"
                   )
+
+                  previous_values = yaml.load(previous_file)
+                  expected = snapshot["images"][service]
+
+                  for field in ["repository", "tag"]:
+                      if previous_values["image"][field] != expected[field]:
+                          raise ValueError(
+                              f"Release {version} is not configured "
+                              f"in {previous} for {service}"
+                          )
+
+          for service in services:
+              target_file = (
+                  base / target /
+                  f"{service}-values.yaml"
+              )
+
+              values = yaml.load(target_file)
+              expected = snapshot["images"][service]
+
+              if values["image"]["repository"] != expected["repository"]:
+                  raise ValueError(
+                      f"Repository mismatch: {service}"
+                  )
+
+              old_tag = values["image"]["tag"]
+              new_tag = expected["tag"]
 
               print(f"{service}: {old_tag} -> {new_tag}")
 
               if old_tag != new_tag:
-                  target_image["tag"] = new_tag
-                  yaml.dump(target_values, target_file)
+                  values["image"]["tag"] = new_tag
+                  yaml.dump(values, target_file)
 
-          print(f"Promotion completed: {source} -> {target}")
+          print(f"Release {version} promoted to {target}")
           PY
 
       - name: Review changes
@@ -130,8 +146,8 @@ jobs:
 
       - name: Commit and push promotion
         env:
+          VERSION: ${{ inputs.release_version }}
           TARGET_ENV: ${{ inputs.target_environment }}
-          RELEASE_BRANCH: ${{ inputs.release_branch }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -139,9 +155,25 @@ jobs:
           git add "helm/environments/${TARGET_ENV}/"
 
           if git diff --cached --quiet; then
-            echo "Image tags are already up to date"
+            echo "Release already configured in ${TARGET_ENV}"
             exit 0
           fi
 
-          git commit -m "[Promotion] Promote release to ${TARGET_ENV}"
-          git push origin "HEAD:${RELEASE_BRANCH}"
+          git commit -m "[Promotion] Release ${VERSION} to ${TARGET_ENV}"
+
+          for attempt in {1..5}; do
+            git fetch origin main
+
+            if ! git rebase origin/main; then
+              git rebase --abort
+              exit 1
+            fi
+
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+
+            sleep 5
+          done
+
+          exit 1
